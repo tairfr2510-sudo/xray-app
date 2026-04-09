@@ -221,9 +221,36 @@ class XRayVideoProcessor(VideoProcessorBase):
                 
         # 2. שלד
         if show_skeleton and results.pose_landmarks:
-            for lm in results.pose_landmarks[0]:
-                if lm.visibility > 0.5:
-                    cv2.circle(img, (int(lm.x*width), int(lm.y*height)), 3, (255, 0, 255), -1)
+            landmarks = results.pose_landmarks[0]
+            
+            # מערך החיבורים המקורי שלך
+            CONNECTIONS = [
+                (0,1), (1,2), (2,3), (3,7), (0,4), (4,5), (5,6), (6,8), (9,10),
+                (11,12), (23,24), (11,23), (12,24), (11,13), (13,15), (15,17), 
+                (15,19), (15,21), (17,19), (12,14), (14,16), (16,18), (16,20), 
+                (16,22), (18,20), (23,25), (25,27), (27,29), (29,31), (31,27),
+                (24,26), (26,28), (28,30), (30,32), (32,28)
+            ]
+            
+            # ציור הקווים המחברים (טורקיז)
+            for start, end in CONNECTIONS:
+                if start < len(landmarks) and end < len(landmarks):
+                    lm_start, lm_end = landmarks[start], landmarks[end]
+                    if lm_start.visibility > 0.3 and lm_end.visibility > 0.3:
+                        start_pos = (int(lm_start.x * width), int(lm_start.y * height))
+                        end_pos = (int(lm_end.x * width), int(lm_end.y * height))
+                        cv2.line(img, start_pos, end_pos, (0, 255, 255), 2)
+            
+            # ציור המפרקים בצבעים הנכונים
+            for idx, lm in enumerate(landmarks):
+                if lm.visibility > 0.3:
+                    x, y = int(lm.x * width), int(lm.y * height)
+                    if idx <= 10: color = (255, 255, 0)      # ראש
+                    elif idx in [11, 12]: color = (0, 255, 0) # כתפיים
+                    elif 13 <= idx <= 22: color = (255, 0, 255) # זרועות
+                    else: color = (255, 0, 0)                 # רגליים ואגן
+                    cv2.circle(img, (x, y), 3, color, -1)
+
                     
         # 3. כוונת אמצע תמיד במרכז
         cx, cy = width // 2, height // 2
@@ -240,7 +267,13 @@ with col1:
         key="xray-system",
         mode=WebRtcMode.SENDRECV,
         video_processor_factory=XRayVideoProcessor,
-        media_stream_constraints={"video": True, "audio": False},
+        media_stream_constraints={
+            "video": {
+                "width": {"ideal": 1280, "min": 640},
+                "height": {"ideal": 720, "min": 480}
+            },
+            "audio": False
+        },
         async_processing=True,
     )
 with col2:
